@@ -33,6 +33,8 @@ function createBot() {
    let pendingPromise = Promise.resolve();
    let walkingInterval = null;
    let isWalking = false;
+   let lastDirection = null;
+   let lastDistance = null;
 
    // Function to generate random coordinates within a radius
    function getRandomPosition(centerX, centerZ, radius = 10) {
@@ -43,21 +45,85 @@ function createBot() {
       return { x, z };
    }
 
+   // Function to get a random direction that's different from the last one
+   function getRandomDirection() {
+      const directions = ['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest'];
+      let availableDirections = directions.filter(dir => dir !== lastDirection);
+      
+      if (availableDirections.length === 0) {
+         availableDirections = directions; // If all directions were used, reset
+      }
+      
+      const randomDir = availableDirections[Math.floor(Math.random() * availableDirections.length)];
+      lastDirection = randomDir;
+      return randomDir;
+   }
+
+   // Function to get a random distance that's different from the last one
+   function getRandomDistance() {
+      let distance;
+      do {
+         distance = Math.floor(Math.random() * 15) + 1; // 1 to 15 blocks
+      } while (distance === lastDistance);
+      
+      lastDistance = distance;
+      return distance;
+   }
+
+   // Function to convert direction to coordinates
+   function directionToCoordinates(direction, distance) {
+      const currentPos = bot.entity.position;
+      let x = Math.floor(currentPos.x);
+      let z = Math.floor(currentPos.z);
+      
+      switch (direction) {
+         case 'north':
+            z -= distance;
+            break;
+         case 'south':
+            z += distance;
+            break;
+         case 'east':
+            x += distance;
+            break;
+         case 'west':
+            x -= distance;
+            break;
+         case 'northeast':
+            x += Math.floor(distance * 0.707);
+            z -= Math.floor(distance * 0.707);
+            break;
+         case 'northwest':
+            x -= Math.floor(distance * 0.707);
+            z -= Math.floor(distance * 0.707);
+            break;
+         case 'southeast':
+            x += Math.floor(distance * 0.707);
+            z += Math.floor(distance * 0.707);
+            break;
+         case 'southwest':
+            x -= Math.floor(distance * 0.707);
+            z += Math.floor(distance * 0.707);
+            break;
+      }
+      
+      return { x: Math.floor(x), z: Math.floor(z) };
+   }
+
    // Function to make bot walk to a random position
    function walkToRandomPosition() {
       if (isWalking) return; // Don't start new walk if already walking
       
-      const currentPos = bot.entity.position;
-      const randomPos = getRandomPosition(currentPos.x, currentPos.z, 15);
+      const direction = getRandomDirection();
+      const distance = getRandomDistance();
+      const coords = directionToCoordinates(direction, distance);
+      const y = Math.floor(bot.entity.position.y);
       
-      // Find a safe Y position (same level or slightly different)
-      const y = Math.floor(currentPos.y);
-      
-      console.log(`[Anti-AFK] Walking to random position: (${randomPos.x}, ${y}, ${randomPos.z})`);
+      console.log(`[Anti-AFK] Walking ${distance} blocks ${direction} to: (${coords.x}, ${y}, ${coords.z})`);
       
       isWalking = true;
       bot.pathfinder.setMovements(defaultMove);
-      bot.pathfinder.setGoal(new GoalBlock(randomPos.x, y, randomPos.z));
+      bot.pathfinder.setGoal(new GoalBlock(coords.x, y, coords.z));
    }
 
    // Function to start the walking behavior
@@ -66,17 +132,15 @@ function createBot() {
          clearInterval(walkingInterval);
       }
       
-      // Walk to a random position every 30-60 seconds
+      // Walk to a random position every 2-5 seconds for constant movement
       walkingInterval = setInterval(() => {
          if (!isWalking) {
             walkToRandomPosition();
          }
-      }, 30000 + Math.random() * 30000); // 30-60 seconds
+      }, 2000 + Math.random() * 3000); // 2-5 seconds
       
-      // Start first walk after a short delay
-      setTimeout(() => {
-         walkToRandomPosition();
-      }, 5000);
+      // Start first walk immediately
+      walkToRandomPosition();
    }
 
    function sendRegister(password) {
