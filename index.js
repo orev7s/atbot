@@ -31,6 +31,53 @@ function createBot() {
    const defaultMove = new Movements(bot, mcData);
 
    let pendingPromise = Promise.resolve();
+   let walkingInterval = null;
+   let isWalking = false;
+
+   // Function to generate random coordinates within a radius
+   function getRandomPosition(centerX, centerZ, radius = 10) {
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = Math.random() * radius;
+      const x = Math.floor(centerX + distance * Math.cos(angle));
+      const z = Math.floor(centerZ + distance * Math.sin(angle));
+      return { x, z };
+   }
+
+   // Function to make bot walk to a random position
+   function walkToRandomPosition() {
+      if (isWalking) return; // Don't start new walk if already walking
+      
+      const currentPos = bot.entity.position;
+      const randomPos = getRandomPosition(currentPos.x, currentPos.z, 15);
+      
+      // Find a safe Y position (same level or slightly different)
+      const y = Math.floor(currentPos.y);
+      
+      console.log(`[Anti-AFK] Walking to random position: (${randomPos.x}, ${y}, ${randomPos.z})`);
+      
+      isWalking = true;
+      bot.pathfinder.setMovements(defaultMove);
+      bot.pathfinder.setGoal(new GoalBlock(randomPos.x, y, randomPos.z));
+   }
+
+   // Function to start the walking behavior
+   function startWalkingBehavior() {
+      if (walkingInterval) {
+         clearInterval(walkingInterval);
+      }
+      
+      // Walk to a random position every 30-60 seconds
+      walkingInterval = setInterval(() => {
+         if (!isWalking) {
+            walkToRandomPosition();
+         }
+      }, 30000 + Math.random() * 30000); // 30-60 seconds
+      
+      // Start first walk after a short delay
+      setTimeout(() => {
+         walkToRandomPosition();
+      }, 5000);
+   }
 
    function sendRegister(password) {
       return new Promise((resolve, reject) => {
@@ -127,10 +174,14 @@ function createBot() {
       }
 
       if (config.utils['anti-afk'].enabled) {
-         bot.setControlState('jump', true);
-         if (config.utils['anti-afk'].sneak) {
-            bot.setControlState('sneak', true);
-         }
+         console.log('[INFO] Started anti-afk module with walking behavior');
+         
+         // Always enable sneaking for all movement
+         bot.setControlState('sneak', true);
+         console.log('[Anti-AFK] Sneaking enabled for all movement');
+         
+         // Start the walking behavior
+         startWalkingBehavior();
       }
    });
 
@@ -138,6 +189,12 @@ function createBot() {
       console.log(
          `\x1b[32m[AfkBot] Bot arrived at the target location. ${bot.entity.position}\x1b[0m`
       );
+      
+      // If this was part of anti-afk walking, mark as not walking anymore
+      if (isWalking) {
+         isWalking = false;
+         console.log('[Anti-AFK] Finished walking to random position');
+      }
    });
 
    bot.on('death', () => {
@@ -145,10 +202,24 @@ function createBot() {
          `\x1b[33m[AfkBot] Bot has died and was respawned at ${bot.entity.position}`,
          '\x1b[0m'
       );
+      
+      // Restart walking behavior after respawn
+      if (config.utils['anti-afk'].enabled) {
+         setTimeout(() => {
+            bot.setControlState('sneak', true);
+            startWalkingBehavior();
+         }, 3000);
+      }
    });
 
    if (config.utils['auto-reconnect']) {
       bot.on('end', () => {
+         // Clear walking interval when bot disconnects
+         if (walkingInterval) {
+            clearInterval(walkingInterval);
+            walkingInterval = null;
+         }
+         
          setTimeout(() => {
             createBot();
          }, config.utils['auto-recconect-delay']);
