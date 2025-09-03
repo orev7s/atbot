@@ -35,6 +35,8 @@ function createBot() {
    let isWalking = false;
    let lastDirection = null;
    let lastDistance = null;
+   let blockedAttempts = 0;
+   const maxBlockedAttempts = 5;
 
    // Function to generate random coordinates within a radius
    function getRandomPosition(centerX, centerZ, radius = 10) {
@@ -124,6 +126,25 @@ function createBot() {
       isWalking = true;
       bot.pathfinder.setMovements(defaultMove);
       bot.pathfinder.setGoal(new GoalBlock(coords.x, y, coords.z));
+   }
+
+   // Function to handle blocked movement
+   function handleBlockedMovement() {
+      console.log('[Anti-AFK] Movement blocked, trying different direction...');
+      blockedAttempts++;
+      
+      if (blockedAttempts >= maxBlockedAttempts) {
+         console.log('[Anti-AFK] Too many blocked attempts, resetting direction history');
+         lastDirection = null;
+         lastDistance = null;
+         blockedAttempts = 0;
+      }
+      
+      // Reset walking state and try again
+      isWalking = false;
+      setTimeout(() => {
+         walkToRandomPosition();
+      }, 1000);
    }
 
    // Function to start the walking behavior
@@ -257,7 +278,31 @@ function createBot() {
       // If this was part of anti-afk walking, mark as not walking anymore
       if (isWalking) {
          isWalking = false;
+         blockedAttempts = 0; // Reset blocked attempts on successful movement
          console.log('[Anti-AFK] Finished walking to random position');
+      }
+   });
+
+   // Handle when bot can't reach the goal (blocked)
+   bot.on('goal_updated', (goal) => {
+      if (isWalking) {
+         console.log('[Anti-AFK] Goal updated, checking if blocked...');
+      }
+   });
+
+   // Handle when bot gives up on a goal (blocked)
+   bot.on('path_update', (results) => {
+      if (isWalking && results.status === 'noPath') {
+         console.log('[Anti-AFK] No path found, bot is blocked');
+         handleBlockedMovement();
+      }
+   });
+
+   // Handle when bot gets stuck
+   bot.on('move', () => {
+      if (isWalking) {
+         // Reset blocked attempts when bot is actually moving
+         blockedAttempts = 0;
       }
    });
 
