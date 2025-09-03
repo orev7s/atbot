@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const mineflayer = require('mineflayer');
 const Movements = require('mineflayer-pathfinder').Movements;
 const pathfinder = require('mineflayer-pathfinder').pathfinder;
